@@ -1,15 +1,14 @@
 """
 MAIAN CI test runner for Augur project.
 """
+import argparse
 import json
-import logging
 import os
+import pprint
 import re
 import shutil
 
 from subprocess import check_output
-
-logging.basicConfig(filename='MAIAN-test-result.log', level=logging.INFO)
 
 fail_build = False  # Specifies if to fail the build
 
@@ -97,26 +96,49 @@ def extract_augur_contracts_for_analysis(contracts_file_path=
     return contract_list
 
 
-setup_blockchain()
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--fail-on-vulnerability",
+                        help="Return a non-zero exit code if a vulnerability is found",
+                        action="store_true",
+                        default=False)
+    args = parser.parse_args()
 
-# Process each file individually and check for suicidal, prodigal and greedy contracts
-for file in extract_augur_contracts_for_analysis():
+    setup_blockchain()
 
-    print("Processing " + file + " for suicidal contracts\n")
-    if run_maian(file, '0'):
-        fail_build = True
+    suicidal = []
+    prodigal = []
+    greedy = []
 
-    print("Processing " + file + " for prodigal contracts\n")
-    if run_maian(file, '1'):
-        fail_build = True
+    # Process each file individually and check for suicidal, prodigal and greedy contracts
+    for file in extract_augur_contracts_for_analysis():
 
-    print("Processing " + file + " for greedy contracts\n")
-    if run_maian(file, '2'):
-        fail_build = True
+        print("Processing " + file + " for suicidal contracts\n")
+        if run_maian(file, '0'):
+            suicidal.append(file)
+            if args.fail_on_vulnerability:
+                fail_build = True
 
+        print("Processing " + file + " for prodigal contracts\n")
+        if run_maian(file, '1'):
+            prodigal.append(file)
+            if args.fail_on_vulnerability:
+                fail_build = True
 
-if fail_build:
-    print("Failing MAIAN test run. Suicidal, prodigal or greedy contracts were found.")
-    exit(1)
+        print("Processing " + file + " for greedy contracts\n")
+        if run_maian(file, '2'):
+            greedy.append(file)
+            if args.fail_on_vulnerability:
+                fail_build = True
 
-print("MAIAN test run passed since no security vulnerabilities were found.")
+    print("#" * 60)
+    print("MAIAN test results summary:")
+    print("Suicidal contracts:")
+    pprint.pprint([c.encode("utf-8") for c in sorted(suicidal)])
+    print("Prodigal contracts:")
+    pprint.pprint([c.encode("utf-8") for c in sorted(prodigal)])
+    print("Greedy contracts:")
+    pprint.pprint([c.encode("utf-8") for c in sorted(greedy)])
+
+    if fail_build:
+        exit(1)
